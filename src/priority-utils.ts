@@ -2,6 +2,13 @@ import { LocalStorage } from "@raycast/api";
 
 const OUTPUT_PRIORITY_KEY = "outputPriorityList";
 const INPUT_PRIORITY_KEY = "inputPriorityList";
+const OUTPUT_DEVICE_INFO_KEY = "outputDeviceInfo";
+const INPUT_DEVICE_INFO_KEY = "inputDeviceInfo";
+
+type StoredDeviceInfo = {
+  name: string;
+  transportType: string;
+};
 
 export async function getOutputPriorityList(): Promise<string[]> {
   const stored = await LocalStorage.getItem<string>(OUTPUT_PRIORITY_KEY);
@@ -19,6 +26,21 @@ export async function setOutputPriorityList(priorityList: string[]): Promise<voi
 
 export async function setInputPriorityList(priorityList: string[]): Promise<void> {
   await LocalStorage.setItem(INPUT_PRIORITY_KEY, JSON.stringify(priorityList));
+}
+
+export async function getDeviceInfo(isOutput: boolean): Promise<StoredDeviceInfo[]> {
+  const key = isOutput ? OUTPUT_DEVICE_INFO_KEY : INPUT_DEVICE_INFO_KEY;
+  const stored = await LocalStorage.getItem<string>(key);
+  return stored ? JSON.parse(stored) : [];
+}
+
+export async function saveDeviceInfo(devices: any[], isOutput: boolean): Promise<void> {
+  const key = isOutput ? OUTPUT_DEVICE_INFO_KEY : INPUT_DEVICE_INFO_KEY;
+  const deviceInfo: StoredDeviceInfo[] = devices.map((device) => ({
+    name: device.name,
+    transportType: device.transportType,
+  }));
+  await LocalStorage.setItem(key, JSON.stringify(deviceInfo));
 }
 
 export function assignPriorityRanks(devices: any[], priorityList: string[]): any[] {

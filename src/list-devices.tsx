@@ -6,6 +6,8 @@ import {
   getInputPriorityList,
   setOutputPriorityList,
   setInputPriorityList,
+  getDeviceInfo,
+  saveDeviceInfo,
 } from "./priority-utils";
 
 type Device = {
@@ -33,9 +35,30 @@ export default function ListDevices() {
       getInputPriorityList(),
     ]);
 
+    // Get stored device info for transport types of disconnected devices
+    const [outputDeviceInfo, inputDeviceInfo] = await Promise.all([getDeviceInfo(true), getDeviceInfo(false)]);
+
+    // Process transport types for storage
+    const outputDevicesWithTransport = outputDevices.map((device) => ({
+      ...device,
+      transportType: Object.entries(TransportType).find(([, v]) => v === device.transportType)?.[0] || "Unknown",
+    }));
+
+    const inputDevicesWithTransport = inputDevices.map((device) => ({
+      ...device,
+      transportType: Object.entries(TransportType).find(([, v]) => v === device.transportType)?.[0] || "Unknown",
+    }));
+
+    // Save current device info for future reference
+    await Promise.all([
+      saveDeviceInfo(outputDevicesWithTransport, true),
+      saveDeviceInfo(inputDevicesWithTransport, false),
+    ]);
+
     // Create full device lists including unavailable devices from priority lists
     const createFullDeviceList = (availableDevices: any[], priorityList: string[], isOutput: boolean) => {
       const devices: Device[] = [];
+      const storedDeviceInfo = isOutput ? outputDeviceInfo : inputDeviceInfo;
 
       // Add all devices from priority list (available or not)
       priorityList.forEach((deviceName, index) => {
@@ -45,18 +68,17 @@ export default function ListDevices() {
           // Device is currently available
           devices.push({
             ...availableDevice,
-            transportType:
-              Object.entries(TransportType).find(([, v]) => v === availableDevice.transportType)?.[0] || "Unknown",
             priorityRank: index + 1,
             isAvailable: true,
           });
         } else {
-          // Device is in priority list but not currently available
+          // Device is in priority list but not currently available - use stored transport type
+          const storedInfo = storedDeviceInfo.find((info) => info.name.toLowerCase() === deviceName.toLowerCase());
           devices.push({
             id: "",
             uid: `unavailable-${deviceName}`,
             name: deviceName,
-            transportType: "Unavailable",
+            transportType: storedInfo?.transportType || "Unknown",
             isInput: !isOutput,
             isOutput: isOutput,
             priorityRank: index + 1,
@@ -71,7 +93,6 @@ export default function ListDevices() {
         if (!alreadyIncluded) {
           devices.push({
             ...device,
-            transportType: Object.entries(TransportType).find(([, v]) => v === device.transportType)?.[0] || "Unknown",
             priorityRank:
               priorityList.length +
               devices.filter((d) => !priorityList.some((p) => p.toLowerCase() === d.name.toLowerCase())).length +
@@ -84,8 +105,8 @@ export default function ListDevices() {
       return devices;
     };
 
-    const processedOutputDevices = createFullDeviceList(outputDevices, outputPriorityList, true);
-    const processedInputDevices = createFullDeviceList(inputDevices, inputPriorityList, false);
+    const processedOutputDevices = createFullDeviceList(outputDevicesWithTransport, outputPriorityList, true);
+    const processedInputDevices = createFullDeviceList(inputDevicesWithTransport, inputPriorityList, false);
 
     // Sort devices by priority rank (lower rank = higher priority)
     processedOutputDevices.sort((a, b) => a.priorityRank - b.priorityRank);
@@ -335,11 +356,12 @@ export default function ListDevices() {
             title={device.name}
             subtitle={device.isAvailable ? device.transportType : `${device.transportType} (Disconnected)`}
             icon={{
-              source: device.isAvailable ? getDeviceIcon(device) : Icon.WifiDisabled,
-              tintColor: !device.isAvailable ? Color.Orange : device.priorityRank === 1 ? Color.Green : Color.SecondaryText,
+              source: getDeviceIcon(device),
+              tintColor: device.priorityRank === 1 && device.isAvailable ? Color.Green : Color.SecondaryText,
             }}
             accessories={[
               ...(device.isAvailable ? [{ text: device.id, tooltip: `Device ID: ${device.id}` }] : []),
+              ...(!device.isAvailable ? [{ icon: Icon.WifiDisabled, tooltip: "Device disconnected" }] : []),
               { text: `#${device.priorityRank}`, tooltip: `Priority rank ${device.priorityRank}` },
             ]}
             actions={renderDeviceActions(device)}
@@ -354,11 +376,12 @@ export default function ListDevices() {
             title={device.name}
             subtitle={device.isAvailable ? device.transportType : `${device.transportType} (Disconnected)`}
             icon={{
-              source: device.isAvailable ? getDeviceIcon(device) : Icon.WifiDisabled,
-              tintColor: !device.isAvailable ? Color.Orange : device.priorityRank === 1 ? Color.Green : Color.SecondaryText,
+              source: getDeviceIcon(device),
+              tintColor: device.priorityRank === 1 && device.isAvailable ? Color.Green : Color.SecondaryText,
             }}
             accessories={[
               ...(device.isAvailable ? [{ text: device.id, tooltip: `Device ID: ${device.id}` }] : []),
+              ...(!device.isAvailable ? [{ icon: Icon.WifiDisabled, tooltip: "Device disconnected" }] : []),
               { text: `#${device.priorityRank}`, tooltip: `Priority rank ${device.priorityRank}` },
             ]}
             actions={renderDeviceActions(device)}
