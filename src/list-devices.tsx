@@ -3,6 +3,8 @@ import { usePromise } from "@raycast/utils";
 import {
   getInputDevices,
   getOutputDevices,
+  getDefaultInputDevice,
+  getDefaultOutputDevice,
   TransportType,
   setDefaultOutputDevice,
   setDefaultInputDevice,
@@ -26,6 +28,7 @@ type Device = {
   isOutput: boolean;
   priorityRank: number;
   isAvailable: boolean;
+  isCurrent: boolean;
 };
 
 interface Preferences {
@@ -41,7 +44,12 @@ export default function ListDevices() {
     isLoading,
     revalidate,
   } = usePromise(async () => {
-    const [outputDevices, inputDevices] = await Promise.all([getOutputDevices(), getInputDevices()]);
+    const [outputDevices, inputDevices, currentOutputDevice, currentInputDevice] = await Promise.all([
+      getOutputDevices(),
+      getInputDevices(),
+      getDefaultOutputDevice(),
+      getDefaultInputDevice(),
+    ]);
 
     // Get existing priority lists (don't auto-add missing devices here)
     const [outputPriorityList, inputPriorityList] = await Promise.all([
@@ -70,7 +78,7 @@ export default function ListDevices() {
     ]);
 
     // Create full device lists including unavailable devices from priority lists
-    const createFullDeviceList = (availableDevices: any[], priorityList: string[], isOutput: boolean) => {
+    const createFullDeviceList = (availableDevices: any[], priorityList: string[], isOutput: boolean, currentDevice: any) => {
       const devices: Device[] = [];
       const storedDeviceInfo = isOutput ? outputDeviceInfo : inputDeviceInfo;
 
@@ -84,6 +92,7 @@ export default function ListDevices() {
             ...availableDevice,
             priorityRank: index + 1,
             isAvailable: true,
+            isCurrent: availableDevice.uid === currentDevice.uid,
           });
         } else {
           // Device is in priority list but not currently available - use stored transport type
@@ -97,6 +106,7 @@ export default function ListDevices() {
             isOutput: isOutput,
             priorityRank: index + 1,
             isAvailable: false,
+            isCurrent: false,
           });
         }
       });
@@ -112,6 +122,7 @@ export default function ListDevices() {
               devices.filter((d) => !priorityList.some((p) => p.toLowerCase() === d.name.toLowerCase())).length +
               1,
             isAvailable: true,
+            isCurrent: device.uid === currentDevice.uid,
           });
         }
       });
@@ -119,8 +130,8 @@ export default function ListDevices() {
       return devices;
     };
 
-    const processedOutputDevices = createFullDeviceList(outputDevicesWithTransport, outputPriorityList, true);
-    const processedInputDevices = createFullDeviceList(inputDevicesWithTransport, inputPriorityList, false);
+    const processedOutputDevices = createFullDeviceList(outputDevicesWithTransport, outputPriorityList, true, currentOutputDevice);
+    const processedInputDevices = createFullDeviceList(inputDevicesWithTransport, inputPriorityList, false, currentInputDevice);
 
     // Sort devices by priority rank (lower rank = higher priority)
     processedOutputDevices.sort((a, b) => a.priorityRank - b.priorityRank);
@@ -400,6 +411,7 @@ export default function ListDevices() {
             accessories={[
               ...(device.isAvailable ? [{ text: device.id, tooltip: `Device ID: ${device.id}` }] : []),
               ...(!device.isAvailable ? [{ icon: Icon.WifiDisabled, tooltip: "Device disconnected" }] : []),
+              ...(device.isCurrent ? [{ icon: Icon.Checkmark, tooltip: "Currently active device" }] : []),
               { text: `#${device.priorityRank}`, tooltip: `Priority rank ${device.priorityRank}` },
             ]}
             actions={renderDeviceActions(device, "output")}
@@ -420,6 +432,7 @@ export default function ListDevices() {
             accessories={[
               ...(device.isAvailable ? [{ text: device.id, tooltip: `Device ID: ${device.id}` }] : []),
               ...(!device.isAvailable ? [{ icon: Icon.WifiDisabled, tooltip: "Device disconnected" }] : []),
+              ...(device.isCurrent ? [{ icon: Icon.Checkmark, tooltip: "Currently active device" }] : []),
               { text: `#${device.priorityRank}`, tooltip: `Priority rank ${device.priorityRank}` },
             ]}
             actions={renderDeviceActions(device, "input")}
