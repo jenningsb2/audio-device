@@ -20,16 +20,43 @@ export default async function PriorityMonitor() {
   const isBackground = environment.launchType === LaunchType.Background;
 
   try {
-    // Get current devices and priority lists
-    const [outputDevices, inputDevices, currentOutput, currentInput, outputPriorityList, inputPriorityList] =
-      await Promise.all([
-        getOutputDevices(),
-        getInputDevices(),
-        getDefaultOutputDevice(),
-        getDefaultInputDevice(),
-        getOutputPriorityList(),
-        getInputPriorityList(),
-      ]);
+    // Get current devices and priority lists with individual error handling
+    const results = await Promise.allSettled([
+      getOutputDevices().catch((err) => {
+        console.log("Failed to get output devices:", err);
+        return [];
+      }),
+      getInputDevices().catch((err) => {
+        console.log("Failed to get input devices:", err);
+        return [];
+      }),
+      getDefaultOutputDevice().catch((err) => {
+        console.log("Failed to get default output device:", err);
+        return null;
+      }),
+      getDefaultInputDevice().catch((err) => {
+        console.log("Failed to get default input device:", err);
+        return null;
+      }),
+      getOutputPriorityList().catch((err) => {
+        console.log("Failed to get output priority list:", err);
+        return [];
+      }),
+      getInputPriorityList().catch((err) => {
+        console.log("Failed to get input priority list:", err);
+        return [];
+      }),
+    ]);
+
+    const resolvedResults = results.map((result) => (result.status === "fulfilled" ? result.value : null));
+    
+    // Type-safe destructuring with explicit casting
+    const outputDevices = resolvedResults[0] as any[] | null;
+    const inputDevices = resolvedResults[1] as any[] | null;
+    const currentOutput = resolvedResults[2] as any | null;
+    const currentInput = resolvedResults[3] as any | null;
+    const outputPriorityList = resolvedResults[4] as string[] | null;
+    const inputPriorityList = resolvedResults[5] as string[] | null;
 
     // Find highest priority available devices
     const getHighestPriorityDevice = (devices: any[], priorityList: string[]) => {
@@ -51,6 +78,13 @@ export default async function PriorityMonitor() {
       return highestPriorityDevice;
     };
 
+    // Ensure we have valid data before proceeding
+    if (!outputDevices || !inputDevices || !outputPriorityList || !inputPriorityList) {
+      console.log("Missing essential data, skipping this cycle");
+      await updateCommandMetadata({ subtitle: "Waiting for device data..." });
+      return;
+    }
+
     const topOutputDevice = getHighestPriorityDevice(outputDevices, outputPriorityList);
     const topInputDevice = getHighestPriorityDevice(inputDevices, inputPriorityList);
 
@@ -59,7 +93,7 @@ export default async function PriorityMonitor() {
 
     if (preferences.enableAutoSwitch && isBackground) {
       // Check output device
-      if (topOutputDevice && currentOutput.uid !== topOutputDevice.uid) {
+      if (topOutputDevice && currentOutput && currentOutput.uid !== topOutputDevice.uid) {
         try {
           await setDefaultOutputDevice(topOutputDevice.id);
           if (preferences.systemOutput) {
@@ -72,7 +106,7 @@ export default async function PriorityMonitor() {
       }
 
       // Check input device
-      if (topInputDevice && currentInput.uid !== topInputDevice.uid) {
+      if (topInputDevice && currentInput && currentInput.uid !== topInputDevice.uid) {
         try {
           await setDefaultInputDevice(topInputDevice.id);
           switchedDevices.push(`Input: ${topInputDevice.name}`);

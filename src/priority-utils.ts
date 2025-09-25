@@ -11,13 +11,29 @@ type StoredDeviceInfo = {
 };
 
 export async function getOutputPriorityList(): Promise<string[]> {
-  const stored = await LocalStorage.getItem<string>(OUTPUT_PRIORITY_KEY);
-  return stored ? JSON.parse(stored) : [];
+  try {
+    const stored = await LocalStorage.getItem<string>(OUTPUT_PRIORITY_KEY);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.log("Failed to parse output priority list, resetting:", error);
+    await LocalStorage.removeItem(OUTPUT_PRIORITY_KEY);
+    return [];
+  }
 }
 
 export async function getInputPriorityList(): Promise<string[]> {
-  const stored = await LocalStorage.getItem<string>(INPUT_PRIORITY_KEY);
-  return stored ? JSON.parse(stored) : [];
+  try {
+    const stored = await LocalStorage.getItem<string>(INPUT_PRIORITY_KEY);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.log("Failed to parse input priority list, resetting:", error);
+    await LocalStorage.removeItem(INPUT_PRIORITY_KEY);
+    return [];
+  }
 }
 
 export async function setOutputPriorityList(priorityList: string[]): Promise<void> {
@@ -29,9 +45,18 @@ export async function setInputPriorityList(priorityList: string[]): Promise<void
 }
 
 export async function getDeviceInfo(isOutput: boolean): Promise<StoredDeviceInfo[]> {
-  const key = isOutput ? OUTPUT_DEVICE_INFO_KEY : INPUT_DEVICE_INFO_KEY;
-  const stored = await LocalStorage.getItem<string>(key);
-  return stored ? JSON.parse(stored) : [];
+  try {
+    const key = isOutput ? OUTPUT_DEVICE_INFO_KEY : INPUT_DEVICE_INFO_KEY;
+    const stored = await LocalStorage.getItem<string>(key);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.log("Failed to parse device info, resetting:", error);
+    const key = isOutput ? OUTPUT_DEVICE_INFO_KEY : INPUT_DEVICE_INFO_KEY;
+    await LocalStorage.removeItem(key);
+    return [];
+  }
 }
 
 export async function saveDeviceInfo(devices: any[], isOutput: boolean): Promise<void> {
