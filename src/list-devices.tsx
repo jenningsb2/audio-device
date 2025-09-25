@@ -1,6 +1,13 @@
-import { Action, ActionPanel, Color, Icon, Keyboard, List, showToast, Toast } from "@raycast/api";
+import { Action, ActionPanel, Color, Icon, Keyboard, List, showToast, Toast, getPreferenceValues } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
-import { getInputDevices, getOutputDevices, TransportType } from "./audio-device";
+import {
+  getInputDevices,
+  getOutputDevices,
+  TransportType,
+  setDefaultOutputDevice,
+  setDefaultInputDevice,
+  setDefaultSystemDevice,
+} from "./audio-device";
 import {
   getOutputPriorityList,
   getInputPriorityList,
@@ -21,7 +28,14 @@ type Device = {
   isAvailable: boolean;
 };
 
+interface Preferences {
+  enableAutoSwitch: boolean;
+  systemOutput: boolean;
+}
+
 export default function ListDevices() {
+  const preferences = getPreferenceValues<Preferences>();
+
   const {
     data: deviceData,
     isLoading,
@@ -134,6 +148,25 @@ export default function ListDevices() {
     );
   }
 
+  const autoSwitchIfTopPriority = async (device: Device, newRank = 1) => {
+    if (preferences.enableAutoSwitch && device.isAvailable && newRank === 1) {
+      try {
+        if (device.isOutput) {
+          await setDefaultOutputDevice(device.id);
+          if (preferences.systemOutput) {
+            await setDefaultSystemDevice(device.id);
+          }
+          showToast({ style: Toast.Style.Success, title: `Auto-switched to output: ${device.name}` });
+        } else {
+          await setDefaultInputDevice(device.id);
+          showToast({ style: Toast.Style.Success, title: `Auto-switched to input: ${device.name}` });
+        }
+      } catch (error) {
+        console.log("Auto-switch failed:", error);
+      }
+    }
+  };
+
   const setAsTopPriority = async (device: Device) => {
     try {
       if (device.isOutput) {
@@ -154,6 +187,9 @@ export default function ListDevices() {
         showToast({ style: Toast.Style.Success, title: `Set ${device.name} as top priority input device` });
       }
       revalidate();
+
+      // Auto-switch if enabled and device is available
+      await autoSwitchIfTopPriority(device);
     } catch (error) {
       showToast({ style: Toast.Style.Failure, title: "Failed to set priority" });
     }
@@ -177,6 +213,12 @@ export default function ListDevices() {
 
         showToast({ style: Toast.Style.Success, title: `Moved ${device.name} up in priority` });
         revalidate();
+
+        // Auto-switch if device moved to #1 position
+        if (currentIndex === 1) {
+          // Was at position 2, now at position 1
+          await autoSwitchIfTopPriority(device, 1);
+        }
       }
     } catch (error) {
       showToast({ style: Toast.Style.Failure, title: "Failed to move device up" });
