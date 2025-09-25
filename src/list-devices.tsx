@@ -1,6 +1,7 @@
 import { Action, ActionPanel, Color, Icon, Keyboard, List, showHUD } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
 import { getInputDevices, getOutputDevices, TransportType } from "./audio-device";
+import { getOutputPriorityList, getInputPriorityList, getPriorityRank } from "./priority-utils";
 
 type Device = {
   id: string;
@@ -9,20 +10,28 @@ type Device = {
   transportType: string;
   isInput: boolean;
   isOutput: boolean;
+  priorityRank: number | null;
 };
 
 export default function ListDevices() {
   const { data: deviceData, isLoading } = usePromise(async () => {
-    const [outputDevices, inputDevices] = await Promise.all([getOutputDevices(), getInputDevices()]);
+    const [outputDevices, inputDevices, outputPriorityList, inputPriorityList] = await Promise.all([
+      getOutputDevices(),
+      getInputDevices(),
+      getOutputPriorityList(),
+      getInputPriorityList(),
+    ]);
 
     const processedOutputDevices = outputDevices.map((device) => ({
       ...device,
       transportType: Object.entries(TransportType).find(([, v]) => v === device.transportType)?.[0] || "Unknown",
+      priorityRank: getPriorityRank(device.name, outputPriorityList),
     }));
 
     const processedInputDevices = inputDevices.map((device) => ({
       ...device,
       transportType: Object.entries(TransportType).find(([, v]) => v === device.transportType)?.[0] || "Unknown",
+      priorityRank: getPriorityRank(device.name, inputPriorityList),
     }));
 
     return {
@@ -100,9 +109,14 @@ export default function ListDevices() {
             subtitle={device.transportType}
             icon={{
               source: getDeviceIcon(device),
-              tintColor: Color.PrimaryText,
+              tintColor: device.priorityRank ? Color.Green : Color.PrimaryText,
             }}
-            accessories={[{ text: device.id, tooltip: `Device ID: ${device.id}` }]}
+            accessories={[
+              ...(device.priorityRank
+                ? [{ text: `#${device.priorityRank}`, tooltip: `Priority rank ${device.priorityRank}` }]
+                : []),
+              { text: device.id, tooltip: `Device ID: ${device.id}` },
+            ]}
             actions={renderDeviceActions(device)}
           />
         ))}
@@ -116,9 +130,14 @@ export default function ListDevices() {
             subtitle={device.transportType}
             icon={{
               source: getDeviceIcon(device),
-              tintColor: Color.PrimaryText,
+              tintColor: device.priorityRank ? Color.Green : Color.PrimaryText,
             }}
-            accessories={[{ text: device.id, tooltip: `Device ID: ${device.id}` }]}
+            accessories={[
+              ...(device.priorityRank
+                ? [{ text: `#${device.priorityRank}`, tooltip: `Priority rank ${device.priorityRank}` }]
+                : []),
+              { text: device.id, tooltip: `Device ID: ${device.id}` },
+            ]}
             actions={renderDeviceActions(device)}
           />
         ))}
