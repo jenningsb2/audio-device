@@ -39,15 +39,12 @@ interface Preferences {
 
 export default function ListDevices() {
   const preferences = getPreferenceValues<Preferences>();
-  
+
   // Local state for priority lists to enable immediate updates
   const [localOutputPriorityList, setLocalOutputPriorityList] = useState<string[]>([]);
   const [localInputPriorityList, setLocalInputPriorityList] = useState<string[]>([]);
 
-  const {
-    data: deviceData,
-    isLoading,
-  } = usePromise(async () => {
+  const { data: deviceData, isLoading } = usePromise(async () => {
     const [outputDevices, inputDevices, currentOutputDevice, currentInputDevice] = await Promise.all([
       getOutputDevices(),
       getInputDevices(),
@@ -82,7 +79,12 @@ export default function ListDevices() {
     ]);
 
     // Create full device lists including unavailable devices from priority lists
-    const createFullDeviceList = (availableDevices: any[], priorityList: string[], isOutput: boolean, currentDevice: any) => {
+    const createFullDeviceList = (
+      availableDevices: any[],
+      priorityList: string[],
+      isOutput: boolean,
+      currentDevice: any,
+    ) => {
       const devices: Device[] = [];
       const storedDeviceInfo = isOutput ? outputDeviceInfo : inputDeviceInfo;
 
@@ -134,8 +136,18 @@ export default function ListDevices() {
       return devices;
     };
 
-    const processedOutputDevices = createFullDeviceList(outputDevicesWithTransport, outputPriorityList, true, currentOutputDevice);
-    const processedInputDevices = createFullDeviceList(inputDevicesWithTransport, inputPriorityList, false, currentInputDevice);
+    const processedOutputDevices = createFullDeviceList(
+      outputDevicesWithTransport,
+      outputPriorityList,
+      true,
+      currentOutputDevice,
+    );
+    const processedInputDevices = createFullDeviceList(
+      inputDevicesWithTransport,
+      inputPriorityList,
+      false,
+      currentInputDevice,
+    );
 
     // Sort devices by priority rank (lower rank = higher priority)
     processedOutputDevices.sort((a, b) => a.priorityRank - b.priorityRank);
@@ -160,19 +172,25 @@ export default function ListDevices() {
   }, [deviceData]);
 
   // Create processed device data using local priority lists
-  const processedDeviceData = deviceData ? (() => {
-    const createDeviceListWithLocalPriorities = (devices: Device[], priorityList: string[]) => {
-      return devices.map(device => ({
-        ...device,
-        priorityRank: priorityList.findIndex(name => name.toLowerCase() === device.name.toLowerCase()) + 1 || priorityList.length + 1
-      })).sort((a, b) => a.priorityRank - b.priorityRank);
-    };
+  const processedDeviceData = deviceData
+    ? (() => {
+        const createDeviceListWithLocalPriorities = (devices: Device[], priorityList: string[]) => {
+          return devices
+            .map((device) => ({
+              ...device,
+              priorityRank:
+                priorityList.findIndex((name) => name.toLowerCase() === device.name.toLowerCase()) + 1 ||
+                priorityList.length + 1,
+            }))
+            .sort((a, b) => a.priorityRank - b.priorityRank);
+        };
 
-    return {
-      outputDevices: createDeviceListWithLocalPriorities(deviceData.outputDevices, localOutputPriorityList),
-      inputDevices: createDeviceListWithLocalPriorities(deviceData.inputDevices, localInputPriorityList),
-    };
-  })() : null;
+        return {
+          outputDevices: createDeviceListWithLocalPriorities(deviceData.outputDevices, localOutputPriorityList),
+          inputDevices: createDeviceListWithLocalPriorities(deviceData.inputDevices, localInputPriorityList),
+        };
+      })()
+    : null;
 
   if (isLoading) {
     return <List isLoading={true} />;
@@ -212,11 +230,8 @@ export default function ListDevices() {
   const setAsTopPriority = async (device: Device, deviceType: "output" | "input") => {
     try {
       const currentList = deviceType === "output" ? localOutputPriorityList : localInputPriorityList;
-      const newList = [
-        device.name,
-        ...currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase()),
-      ];
-      
+      const newList = [device.name, ...currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase())];
+
       // Update local state immediately for instant visual feedback
       if (deviceType === "output") {
         setLocalOutputPriorityList(newList);
@@ -237,7 +252,7 @@ export default function ListDevices() {
 
   const moveUp = async (device: Device, deviceType: "output" | "input") => {
     try {
-      const currentList = deviceType === "output" ? await getOutputPriorityList() : await getInputPriorityList();
+      const currentList = deviceType === "output" ? localOutputPriorityList : localInputPriorityList;
       const currentIndex = currentList.findIndex((name) => name.toLowerCase() === device.name.toLowerCase());
 
       if (currentIndex > 0) {
@@ -245,14 +260,17 @@ export default function ListDevices() {
         // Swap with the device above
         [newList[currentIndex], newList[currentIndex - 1]] = [newList[currentIndex - 1], newList[currentIndex]];
 
+        // Update local state immediately for instant visual feedback
         if (deviceType === "output") {
+          setLocalOutputPriorityList(newList);
           await setOutputPriorityList(newList);
         } else {
+          setLocalInputPriorityList(newList);
           await setInputPriorityList(newList);
         }
 
         showToast({ style: Toast.Style.Success, title: `Moved ${device.name} up in priority` });
-  
+
         // Auto-switch if device moved to #1 position
         if (currentIndex === 1) {
           // Was at position 2, now at position 1
@@ -266,7 +284,7 @@ export default function ListDevices() {
 
   const moveDown = async (device: Device, deviceType: "output" | "input") => {
     try {
-      const currentList = deviceType === "output" ? await getOutputPriorityList() : await getInputPriorityList();
+      const currentList = deviceType === "output" ? localOutputPriorityList : localInputPriorityList;
       const currentIndex = currentList.findIndex((name) => name.toLowerCase() === device.name.toLowerCase());
 
       if (currentIndex < currentList.length - 1 && currentIndex !== -1) {
@@ -274,14 +292,17 @@ export default function ListDevices() {
         // Swap with the device below
         [newList[currentIndex], newList[currentIndex + 1]] = [newList[currentIndex + 1], newList[currentIndex]];
 
+        // Update local state immediately for instant visual feedback
         if (deviceType === "output") {
+          setLocalOutputPriorityList(newList);
           await setOutputPriorityList(newList);
         } else {
+          setLocalInputPriorityList(newList);
           await setInputPriorityList(newList);
         }
 
         showToast({ style: Toast.Style.Success, title: `Moved ${device.name} down in priority` });
-        }
+      }
     } catch (error) {
       showToast({ style: Toast.Style.Failure, title: "Failed to move device down" });
     }
@@ -289,13 +310,16 @@ export default function ListDevices() {
 
   const moveToBottom = async (device: Device, deviceType: "output" | "input") => {
     try {
-      const currentList = deviceType === "output" ? await getOutputPriorityList() : await getInputPriorityList();
+      const currentList = deviceType === "output" ? localOutputPriorityList : localInputPriorityList;
       const newList = [...currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase()), device.name];
 
+      // Update local state immediately for instant visual feedback
       if (deviceType === "output") {
+        setLocalOutputPriorityList(newList);
         await setOutputPriorityList(newList);
         showToast({ style: Toast.Style.Success, title: `Moved ${device.name} to bottom of output priority list` });
       } else {
+        setLocalInputPriorityList(newList);
         await setInputPriorityList(newList);
         showToast({ style: Toast.Style.Success, title: `Moved ${device.name} to bottom of input priority list` });
       }
@@ -340,13 +364,15 @@ export default function ListDevices() {
             style={Action.Style.Destructive}
             onAction={async () => {
               try {
-                const currentList =
-                  deviceType === "output" ? await getOutputPriorityList() : await getInputPriorityList();
+                const currentList = deviceType === "output" ? localOutputPriorityList : localInputPriorityList;
                 const newList = currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase());
 
+                // Update local state immediately for instant visual feedback
                 if (deviceType === "output") {
+                  setLocalOutputPriorityList(newList);
                   await setOutputPriorityList(newList);
                 } else {
+                  setLocalInputPriorityList(newList);
                   await setInputPriorityList(newList);
                 }
 
@@ -354,7 +380,7 @@ export default function ListDevices() {
                   style: Toast.Style.Success,
                   title: `Removed ${device.name} from ${deviceType} priority list`,
                 });
-                        } catch (error) {
+              } catch (error) {
                 showToast({ style: Toast.Style.Failure, title: "Failed to remove device" });
               }
             }}
