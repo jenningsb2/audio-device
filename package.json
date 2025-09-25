@@ -189,6 +189,15 @@
       "description": "The name, as found in the output device list, of the output device to use as the second favourite",
       "type": "textfield",
       "default": ""
+    },
+    {
+      "name": "enableAutoSwitch",
+      "required": false,
+      "title": "Enable Automatic Priority Switching",
+      "description": "Automatically switch to the highest priority available device when audio devices connect or disconnect",
+      "label": "Enable automatic switching",
+      "type": "checkbox",
+      "default": false
     }
   ],
   "dependencies": {
