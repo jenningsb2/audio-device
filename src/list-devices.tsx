@@ -1,4 +1,4 @@
-import { Action, ActionPanel, Color, Icon, Keyboard, List, showHUD, showToast, Toast } from "@raycast/api";
+import { Action, ActionPanel, Color, Icon, Keyboard, List, showToast, Toast } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
 import { getInputDevices, getOutputDevices, TransportType } from "./audio-device";
 import {
@@ -80,7 +80,7 @@ export default function ListDevices() {
           ...currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase()),
         ];
         await setOutputPriorityList(newList);
-        showHUD(`Set ${device.name} as top priority output device`);
+        showToast({ style: Toast.Style.Success, title: `Set ${device.name} as top priority output device` });
       } else {
         const currentList = await getInputPriorityList();
         const newList = [
@@ -88,11 +88,59 @@ export default function ListDevices() {
           ...currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase()),
         ];
         await setInputPriorityList(newList);
-        showHUD(`Set ${device.name} as top priority input device`);
+        showToast({ style: Toast.Style.Success, title: `Set ${device.name} as top priority input device` });
       }
       revalidate();
     } catch (error) {
       showToast({ style: Toast.Style.Failure, title: "Failed to set priority" });
+    }
+  };
+
+  const moveUp = async (device: Device) => {
+    try {
+      const currentList = device.isOutput ? await getOutputPriorityList() : await getInputPriorityList();
+      const currentIndex = currentList.findIndex((name) => name.toLowerCase() === device.name.toLowerCase());
+
+      if (currentIndex > 0) {
+        const newList = [...currentList];
+        // Swap with the device above
+        [newList[currentIndex], newList[currentIndex - 1]] = [newList[currentIndex - 1], newList[currentIndex]];
+
+        if (device.isOutput) {
+          await setOutputPriorityList(newList);
+        } else {
+          await setInputPriorityList(newList);
+        }
+
+        showToast({ style: Toast.Style.Success, title: `Moved ${device.name} up in priority` });
+        revalidate();
+      }
+    } catch (error) {
+      showToast({ style: Toast.Style.Failure, title: "Failed to move device up" });
+    }
+  };
+
+  const moveDown = async (device: Device) => {
+    try {
+      const currentList = device.isOutput ? await getOutputPriorityList() : await getInputPriorityList();
+      const currentIndex = currentList.findIndex((name) => name.toLowerCase() === device.name.toLowerCase());
+
+      if (currentIndex < currentList.length - 1 && currentIndex !== -1) {
+        const newList = [...currentList];
+        // Swap with the device below
+        [newList[currentIndex], newList[currentIndex + 1]] = [newList[currentIndex + 1], newList[currentIndex]];
+
+        if (device.isOutput) {
+          await setOutputPriorityList(newList);
+        } else {
+          await setInputPriorityList(newList);
+        }
+
+        showToast({ style: Toast.Style.Success, title: `Moved ${device.name} down in priority` });
+        revalidate();
+      }
+    } catch (error) {
+      showToast({ style: Toast.Style.Failure, title: "Failed to move device down" });
     }
   };
 
@@ -105,7 +153,7 @@ export default function ListDevices() {
           device.name,
         ];
         await setOutputPriorityList(newList);
-        showHUD(`Moved ${device.name} to bottom of output priority list`);
+        showToast({ style: Toast.Style.Success, title: `Moved ${device.name} to bottom of output priority list` });
       } else {
         const currentList = await getInputPriorityList();
         const newList = [
@@ -113,7 +161,7 @@ export default function ListDevices() {
           device.name,
         ];
         await setInputPriorityList(newList);
-        showHUD(`Moved ${device.name} to bottom of input priority list`);
+        showToast({ style: Toast.Style.Success, title: `Moved ${device.name} to bottom of input priority list` });
       }
       revalidate();
     } catch (error) {
@@ -129,6 +177,20 @@ export default function ListDevices() {
           icon={Icon.ChevronUp}
           onAction={() => setAsTopPriority(device)}
           shortcut={{ modifiers: ["cmd"], key: "t" }}
+        />
+        {device.priorityRank > 1 && (
+          <Action
+            title="Move Up in Priority"
+            icon={Icon.ArrowUp}
+            onAction={() => moveUp(device)}
+            shortcut={{ modifiers: ["cmd"], key: "arrowUp" }}
+          />
+        )}
+        <Action
+          title="Move Down in Priority"
+          icon={Icon.ArrowDown}
+          onAction={() => moveDown(device)}
+          shortcut={{ modifiers: ["cmd"], key: "arrowDown" }}
         />
         <Action
           title="Move to Bottom"
@@ -161,7 +223,11 @@ export default function ListDevices() {
           title="Show Device Details"
           icon={Icon.Info}
           onAction={() => {
-            showHUD(`${device.name}\nType: ${device.transportType}\nID: ${device.id}\nUID: ${device.uid}`);
+            showToast({
+              style: Toast.Style.Success,
+              title: device.name,
+              message: `Type: ${device.transportType}\nID: ${device.id}\nUID: ${device.uid}`,
+            });
           }}
           shortcut={{ modifiers: ["cmd"], key: "d" }}
         />
@@ -202,7 +268,7 @@ export default function ListDevices() {
             subtitle={device.transportType}
             icon={{
               source: getDeviceIcon(device),
-              tintColor: device.priorityRank <= 3 ? Color.Green : Color.SecondaryText,
+              tintColor: device.priorityRank === 1 ? Color.Green : Color.SecondaryText,
             }}
             accessories={[
               { text: `#${device.priorityRank}`, tooltip: `Priority rank ${device.priorityRank}` },
@@ -221,7 +287,7 @@ export default function ListDevices() {
             subtitle={device.transportType}
             icon={{
               source: getDeviceIcon(device),
-              tintColor: device.priorityRank <= 3 ? Color.Green : Color.SecondaryText,
+              tintColor: device.priorityRank === 1 ? Color.Green : Color.SecondaryText,
             }}
             accessories={[
               { text: `#${device.priorityRank}`, tooltip: `Priority rank ${device.priorityRank}` },
