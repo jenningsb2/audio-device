@@ -29,8 +29,8 @@ Interactive interface for managing audio device priorities.
 
 **Keyboard Shortcuts:**
 - `⌘+T` - Set as Top Priority
-- `⌘+↑` - Move Up in Priority
-- `⌘+↓` - Move Down in Priority  
+- `⌘+⌥+↑` - Move Up in Priority
+- `⌘+⌥+↓` - Move Down in Priority  
 - `⌘+B` - Move to Bottom
 - `⌘+C` - Copy Device Name
 - `⌘+I` - Copy Device ID

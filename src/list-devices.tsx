@@ -292,14 +292,14 @@ export default function ListDevices() {
             title="Move Up in Priority"
             icon={Icon.ArrowUp}
             onAction={() => moveUp(device, deviceType)}
-            shortcut={{ modifiers: ["cmd"], key: "arrowUp" }}
+            shortcut={{ modifiers: ["cmd", "opt"], key: "arrowUp" }}
           />
         )}
         <Action
           title="Move Down in Priority"
           icon={Icon.ArrowDown}
           onAction={() => moveDown(device, deviceType)}
-          shortcut={{ modifiers: ["cmd"], key: "arrowDown" }}
+          shortcut={{ modifiers: ["cmd", "opt"], key: "arrowDown" }}
         />
         <Action
           title="Move to Bottom"
