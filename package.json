@@ -55,6 +55,13 @@
       "disabledByDefault": true
     },
     {
+      "name": "list-devices",
+      "title": "List Devices",
+      "subtitle": "Audio Device",
+      "description": "List all available input and output audio devices",
+      "mode": "view"
+    },
+    {
       "name": "use-combo1",
       "title": "Use Combo 1",
       "subtitle": "Audio Device",
