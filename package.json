@@ -62,6 +62,14 @@
       "mode": "view"
     },
     {
+      "name": "priority-monitor",
+      "title": "Priority Monitor",
+      "subtitle": "Audio Device",
+      "description": "Monitor audio devices and automatically switch to highest priority when enabled",
+      "mode": "no-view",
+      "interval": "15s"
+    },
+    {
       "name": "use-combo1",
       "title": "Use Combo 1",
       "subtitle": "Audio Device",
