@@ -406,7 +406,7 @@ export default function ListDevices() {
             subtitle={device.isAvailable ? device.transportType : `${device.transportType} (Disconnected)`}
             icon={{
               source: getDeviceIcon(device),
-              tintColor: device.priorityRank === 1 && device.isAvailable ? Color.Green : Color.SecondaryText,
+              tintColor: device.isCurrent ? Color.Green : Color.SecondaryText,
             }}
             accessories={[
               ...(device.isAvailable ? [{ text: device.id, tooltip: `Device ID: ${device.id}` }] : []),
@@ -427,7 +427,7 @@ export default function ListDevices() {
             subtitle={device.isAvailable ? device.transportType : `${device.transportType} (Disconnected)`}
             icon={{
               source: getDeviceIcon(device),
-              tintColor: device.priorityRank === 1 && device.isAvailable ? Color.Green : Color.SecondaryText,
+              tintColor: device.isCurrent ? Color.Green : Color.SecondaryText,
             }}
             accessories={[
               ...(device.isAvailable ? [{ text: device.id, tooltip: `Device ID: ${device.id}` }] : []),
