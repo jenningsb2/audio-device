@@ -148,16 +148,16 @@ export default function ListDevices() {
     );
   }
 
-  const autoSwitchIfTopPriority = async (device: Device, newRank = 1) => {
+  const autoSwitchIfTopPriority = async (device: Device, newRank = 1, deviceType: "output" | "input") => {
     if (preferences.enableAutoSwitch && device.isAvailable && newRank === 1) {
       try {
-        if (device.isOutput) {
+        if (deviceType === "output" && device.isOutput) {
           await setDefaultOutputDevice(device.id);
           if (preferences.systemOutput) {
             await setDefaultSystemDevice(device.id);
           }
           showToast({ style: Toast.Style.Success, title: `Auto-switched to output: ${device.name}` });
-        } else {
+        } else if (deviceType === "input" && device.isInput) {
           await setDefaultInputDevice(device.id);
           showToast({ style: Toast.Style.Success, title: `Auto-switched to input: ${device.name}` });
         }
@@ -167,9 +167,9 @@ export default function ListDevices() {
     }
   };
 
-  const setAsTopPriority = async (device: Device) => {
+  const setAsTopPriority = async (device: Device, deviceType: "output" | "input") => {
     try {
-      if (device.isOutput) {
+      if (deviceType === "output") {
         const currentList = await getOutputPriorityList();
         const newList = [
           device.name,
@@ -189,15 +189,15 @@ export default function ListDevices() {
       revalidate();
 
       // Auto-switch if enabled and device is available
-      await autoSwitchIfTopPriority(device);
+      await autoSwitchIfTopPriority(device, 1, deviceType);
     } catch (error) {
       showToast({ style: Toast.Style.Failure, title: "Failed to set priority" });
     }
   };
 
-  const moveUp = async (device: Device) => {
+  const moveUp = async (device: Device, deviceType: "output" | "input") => {
     try {
-      const currentList = device.isOutput ? await getOutputPriorityList() : await getInputPriorityList();
+      const currentList = deviceType === "output" ? await getOutputPriorityList() : await getInputPriorityList();
       const currentIndex = currentList.findIndex((name) => name.toLowerCase() === device.name.toLowerCase());
 
       if (currentIndex > 0) {
@@ -205,7 +205,7 @@ export default function ListDevices() {
         // Swap with the device above
         [newList[currentIndex], newList[currentIndex - 1]] = [newList[currentIndex - 1], newList[currentIndex]];
 
-        if (device.isOutput) {
+        if (deviceType === "output") {
           await setOutputPriorityList(newList);
         } else {
           await setInputPriorityList(newList);
@@ -217,7 +217,7 @@ export default function ListDevices() {
         // Auto-switch if device moved to #1 position
         if (currentIndex === 1) {
           // Was at position 2, now at position 1
-          await autoSwitchIfTopPriority(device, 1);
+          await autoSwitchIfTopPriority(device, 1, deviceType);
         }
       }
     } catch (error) {
@@ -225,9 +225,9 @@ export default function ListDevices() {
     }
   };
 
-  const moveDown = async (device: Device) => {
+  const moveDown = async (device: Device, deviceType: "output" | "input") => {
     try {
-      const currentList = device.isOutput ? await getOutputPriorityList() : await getInputPriorityList();
+      const currentList = deviceType === "output" ? await getOutputPriorityList() : await getInputPriorityList();
       const currentIndex = currentList.findIndex((name) => name.toLowerCase() === device.name.toLowerCase());
 
       if (currentIndex < currentList.length - 1 && currentIndex !== -1) {
@@ -235,7 +235,7 @@ export default function ListDevices() {
         // Swap with the device below
         [newList[currentIndex], newList[currentIndex + 1]] = [newList[currentIndex + 1], newList[currentIndex]];
 
-        if (device.isOutput) {
+        if (deviceType === "output") {
           await setOutputPriorityList(newList);
         } else {
           await setInputPriorityList(newList);
@@ -249,22 +249,15 @@ export default function ListDevices() {
     }
   };
 
-  const moveToBottom = async (device: Device) => {
+  const moveToBottom = async (device: Device, deviceType: "output" | "input") => {
     try {
-      if (device.isOutput) {
-        const currentList = await getOutputPriorityList();
-        const newList = [
-          ...currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase()),
-          device.name,
-        ];
+      const currentList = deviceType === "output" ? await getOutputPriorityList() : await getInputPriorityList();
+      const newList = [...currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase()), device.name];
+
+      if (deviceType === "output") {
         await setOutputPriorityList(newList);
         showToast({ style: Toast.Style.Success, title: `Moved ${device.name} to bottom of output priority list` });
       } else {
-        const currentList = await getInputPriorityList();
-        const newList = [
-          ...currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase()),
-          device.name,
-        ];
         await setInputPriorityList(newList);
         showToast({ style: Toast.Style.Success, title: `Moved ${device.name} to bottom of input priority list` });
       }
@@ -274,33 +267,33 @@ export default function ListDevices() {
     }
   };
 
-  const renderDeviceActions = (device: Device) => (
+  const renderDeviceActions = (device: Device, deviceType: "output" | "input") => (
     <ActionPanel>
       <ActionPanel.Section title="Priority Actions">
         <Action
           title="Set as Top Priority"
           icon={Icon.ChevronUp}
-          onAction={() => setAsTopPriority(device)}
+          onAction={() => setAsTopPriority(device, deviceType)}
           shortcut={{ modifiers: ["cmd"], key: "t" }}
         />
         {device.priorityRank > 1 && (
           <Action
             title="Move Up in Priority"
             icon={Icon.ArrowUp}
-            onAction={() => moveUp(device)}
+            onAction={() => moveUp(device, deviceType)}
             shortcut={{ modifiers: ["cmd"], key: "arrowUp" }}
           />
         )}
         <Action
           title="Move Down in Priority"
           icon={Icon.ArrowDown}
-          onAction={() => moveDown(device)}
+          onAction={() => moveDown(device, deviceType)}
           shortcut={{ modifiers: ["cmd"], key: "arrowDown" }}
         />
         <Action
           title="Move to Bottom"
           icon={Icon.ChevronDown}
-          onAction={() => moveToBottom(device)}
+          onAction={() => moveToBottom(device, deviceType)}
           shortcut={{ modifiers: ["cmd"], key: "b" }}
         />
         {!device.isAvailable && (
@@ -310,17 +303,20 @@ export default function ListDevices() {
             style={Action.Style.Destructive}
             onAction={async () => {
               try {
-                if (device.isOutput) {
-                  const currentList = await getOutputPriorityList();
-                  const newList = currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase());
+                const currentList =
+                  deviceType === "output" ? await getOutputPriorityList() : await getInputPriorityList();
+                const newList = currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase());
+
+                if (deviceType === "output") {
                   await setOutputPriorityList(newList);
-                  showToast({ style: Toast.Style.Success, title: `Removed ${device.name} from priority list` });
                 } else {
-                  const currentList = await getInputPriorityList();
-                  const newList = currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase());
                   await setInputPriorityList(newList);
-                  showToast({ style: Toast.Style.Success, title: `Removed ${device.name} from priority list` });
                 }
+
+                showToast({
+                  style: Toast.Style.Success,
+                  title: `Removed ${device.name} from ${deviceType} priority list`,
+                });
                 revalidate();
               } catch (error) {
                 showToast({ style: Toast.Style.Failure, title: "Failed to remove device" });
@@ -406,7 +402,7 @@ export default function ListDevices() {
               ...(!device.isAvailable ? [{ icon: Icon.WifiDisabled, tooltip: "Device disconnected" }] : []),
               { text: `#${device.priorityRank}`, tooltip: `Priority rank ${device.priorityRank}` },
             ]}
-            actions={renderDeviceActions(device)}
+            actions={renderDeviceActions(device, "output")}
           />
         ))}
       </List.Section>
@@ -426,7 +422,7 @@ export default function ListDevices() {
               ...(!device.isAvailable ? [{ icon: Icon.WifiDisabled, tooltip: "Device disconnected" }] : []),
               { text: `#${device.priorityRank}`, tooltip: `Priority rank ${device.priorityRank}` },
             ]}
-            actions={renderDeviceActions(device)}
+            actions={renderDeviceActions(device, "input")}
           />
         ))}
       </List.Section>
