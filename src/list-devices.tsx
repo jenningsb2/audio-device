@@ -339,8 +339,8 @@ export default function ListDevices() {
               tintColor: !device.isAvailable ? Color.Orange : device.priorityRank === 1 ? Color.Green : Color.SecondaryText,
             }}
             accessories={[
-              { text: `#${device.priorityRank}`, tooltip: `Priority rank ${device.priorityRank}` },
               ...(device.isAvailable ? [{ text: device.id, tooltip: `Device ID: ${device.id}` }] : []),
+              { text: `#${device.priorityRank}`, tooltip: `Priority rank ${device.priorityRank}` },
             ]}
             actions={renderDeviceActions(device)}
           />
@@ -358,8 +358,8 @@ export default function ListDevices() {
               tintColor: !device.isAvailable ? Color.Orange : device.priorityRank === 1 ? Color.Green : Color.SecondaryText,
             }}
             accessories={[
-              { text: `#${device.priorityRank}`, tooltip: `Priority rank ${device.priorityRank}` },
               ...(device.isAvailable ? [{ text: device.id, tooltip: `Device ID: ${device.id}` }] : []),
+              { text: `#${device.priorityRank}`, tooltip: `Priority rank ${device.priorityRank}` },
             ]}
             actions={renderDeviceActions(device)}
           />
