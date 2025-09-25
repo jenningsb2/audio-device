@@ -1,7 +1,13 @@
-import { Action, ActionPanel, Color, Icon, Keyboard, List, showHUD } from "@raycast/api";
+import { Action, ActionPanel, Color, Icon, Keyboard, List, showHUD, showToast, Toast } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
 import { getInputDevices, getOutputDevices, TransportType } from "./audio-device";
-import { getOutputPriorityList, getInputPriorityList, getPriorityRank } from "./priority-utils";
+import {
+  getOutputPriorityList,
+  getInputPriorityList,
+  setOutputPriorityList,
+  setInputPriorityList,
+  getPriorityRank,
+} from "./priority-utils";
 
 type Device = {
   id: string;
@@ -14,7 +20,11 @@ type Device = {
 };
 
 export default function ListDevices() {
-  const { data: deviceData, isLoading } = usePromise(async () => {
+  const {
+    data: deviceData,
+    isLoading,
+    revalidate,
+  } = usePromise(async () => {
     const [outputDevices, inputDevices, outputPriorityList, inputPriorityList] = await Promise.all([
       getOutputDevices(),
       getInputDevices(),
@@ -33,6 +43,25 @@ export default function ListDevices() {
       transportType: Object.entries(TransportType).find(([, v]) => v === device.transportType)?.[0] || "Unknown",
       priorityRank: getPriorityRank(device.name, inputPriorityList),
     }));
+
+    // Sort devices: priority devices first (by rank), then non-priority alphabetically
+    processedOutputDevices.sort((a, b) => {
+      if (a.priorityRank && b.priorityRank) {
+        return a.priorityRank - b.priorityRank; // Lower rank number = higher priority
+      }
+      if (a.priorityRank && !b.priorityRank) return -1; // Priority devices first
+      if (!a.priorityRank && b.priorityRank) return 1; // Priority devices first
+      return a.name.localeCompare(b.name); // Alphabetical for non-priority
+    });
+
+    processedInputDevices.sort((a, b) => {
+      if (a.priorityRank && b.priorityRank) {
+        return a.priorityRank - b.priorityRank; // Lower rank number = higher priority
+      }
+      if (a.priorityRank && !b.priorityRank) return -1; // Priority devices first
+      if (!a.priorityRank && b.priorityRank) return 1; // Priority devices first
+      return a.name.localeCompare(b.name); // Alphabetical for non-priority
+    });
 
     return {
       outputDevices: processedOutputDevices,
@@ -56,23 +85,128 @@ export default function ListDevices() {
     );
   }
 
+  const setAsTopPriority = async (device: Device) => {
+    try {
+      if (device.isOutput) {
+        const currentList = await getOutputPriorityList();
+        const newList = [
+          device.name,
+          ...currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase()),
+        ];
+        await setOutputPriorityList(newList);
+        showHUD(`Set ${device.name} as top priority output device`);
+      } else {
+        const currentList = await getInputPriorityList();
+        const newList = [
+          device.name,
+          ...currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase()),
+        ];
+        await setInputPriorityList(newList);
+        showHUD(`Set ${device.name} as top priority input device`);
+      }
+      revalidate();
+    } catch (error) {
+      showToast({ style: Toast.Style.Failure, title: "Failed to set priority" });
+    }
+  };
+
+  const addToPriorityList = async (device: Device) => {
+    try {
+      if (device.isOutput) {
+        const currentList = await getOutputPriorityList();
+        if (!currentList.some((name) => name.toLowerCase() === device.name.toLowerCase())) {
+          await setOutputPriorityList([...currentList, device.name]);
+          showHUD(`Added ${device.name} to output priority list`);
+        }
+      } else {
+        const currentList = await getInputPriorityList();
+        if (!currentList.some((name) => name.toLowerCase() === device.name.toLowerCase())) {
+          await setInputPriorityList([...currentList, device.name]);
+          showHUD(`Added ${device.name} to input priority list`);
+        }
+      }
+      revalidate();
+    } catch (error) {
+      showToast({ style: Toast.Style.Failure, title: "Failed to add to priority list" });
+    }
+  };
+
+  const removeFromPriorityList = async (device: Device) => {
+    try {
+      if (device.isOutput) {
+        const currentList = await getOutputPriorityList();
+        const newList = currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase());
+        await setOutputPriorityList(newList);
+        showHUD(`Removed ${device.name} from output priority list`);
+      } else {
+        const currentList = await getInputPriorityList();
+        const newList = currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase());
+        await setInputPriorityList(newList);
+        showHUD(`Removed ${device.name} from input priority list`);
+      }
+      revalidate();
+    } catch (error) {
+      showToast({ style: Toast.Style.Failure, title: "Failed to remove from priority list" });
+    }
+  };
+
   const renderDeviceActions = (device: Device) => (
     <ActionPanel>
-      <Action.CopyToClipboard title="Copy Device Name" content={device.name} shortcut={Keyboard.Shortcut.Common.Copy} />
-      <Action.CopyToClipboard title="Copy Device ID" content={device.id} shortcut={{ modifiers: ["cmd"], key: "i" }} />
-      <Action.CopyToClipboard
-        title="Copy Device UID"
-        content={device.uid}
-        shortcut={{ modifiers: ["cmd"], key: "u" }}
-      />
-      <Action
-        title="Show Device Details"
-        icon={Icon.Info}
-        onAction={() => {
-          showHUD(`${device.name}\nType: ${device.transportType}\nID: ${device.id}\nUID: ${device.uid}`);
-        }}
-        shortcut={{ modifiers: ["cmd"], key: "d" }}
-      />
+      {device.priorityRank ? (
+        <ActionPanel.Section title="Priority Actions">
+          <Action
+            title="Set as Top Priority"
+            icon={Icon.ChevronUp}
+            onAction={() => setAsTopPriority(device)}
+            shortcut={{ modifiers: ["cmd"], key: "t" }}
+          />
+          <Action
+            title="Remove from Priority List"
+            icon={Icon.Trash}
+            style={Action.Style.Destructive}
+            onAction={() => removeFromPriorityList(device)}
+            shortcut={{ modifiers: ["cmd"], key: "backspace" }}
+          />
+        </ActionPanel.Section>
+      ) : (
+        <ActionPanel.Section title="Priority Actions">
+          <Action
+            title="Add to Priority List"
+            icon={Icon.Plus}
+            onAction={() => addToPriorityList(device)}
+            shortcut={{ modifiers: ["cmd"], key: "return" }}
+          />
+        </ActionPanel.Section>
+      )}
+
+      <ActionPanel.Section title="Copy Actions">
+        <Action.CopyToClipboard
+          title="Copy Device Name"
+          content={device.name}
+          shortcut={Keyboard.Shortcut.Common.Copy}
+        />
+        <Action.CopyToClipboard
+          title="Copy Device ID"
+          content={device.id}
+          shortcut={{ modifiers: ["cmd"], key: "i" }}
+        />
+        <Action.CopyToClipboard
+          title="Copy Device UID"
+          content={device.uid}
+          shortcut={{ modifiers: ["cmd"], key: "u" }}
+        />
+      </ActionPanel.Section>
+
+      <ActionPanel.Section title="Info">
+        <Action
+          title="Show Device Details"
+          icon={Icon.Info}
+          onAction={() => {
+            showHUD(`${device.name}\nType: ${device.transportType}\nID: ${device.id}\nUID: ${device.uid}`);
+          }}
+          shortcut={{ modifiers: ["cmd"], key: "d" }}
+        />
+      </ActionPanel.Section>
     </ActionPanel>
   );
 
