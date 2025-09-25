@@ -1,5 +1,6 @@
 import { Action, ActionPanel, Color, Icon, Keyboard, List, showToast, Toast, getPreferenceValues } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
+import { useState, useEffect } from "react";
 import {
   getInputDevices,
   getOutputDevices,
@@ -38,11 +39,14 @@ interface Preferences {
 
 export default function ListDevices() {
   const preferences = getPreferenceValues<Preferences>();
+  
+  // Local state for priority lists to enable immediate updates
+  const [localOutputPriorityList, setLocalOutputPriorityList] = useState<string[]>([]);
+  const [localInputPriorityList, setLocalInputPriorityList] = useState<string[]>([]);
 
   const {
     data: deviceData,
     isLoading,
-    revalidate,
   } = usePromise(async () => {
     const [outputDevices, inputDevices, currentOutputDevice, currentInputDevice] = await Promise.all([
       getOutputDevices(),
@@ -140,14 +144,41 @@ export default function ListDevices() {
     return {
       outputDevices: processedOutputDevices,
       inputDevices: processedInputDevices,
+      outputPriorityList,
+      inputPriorityList,
+      currentOutputDevice,
+      currentInputDevice,
     };
   }, []);
+
+  // Initialize local state when data loads
+  useEffect(() => {
+    if (deviceData) {
+      setLocalOutputPriorityList(deviceData.outputPriorityList);
+      setLocalInputPriorityList(deviceData.inputPriorityList);
+    }
+  }, [deviceData]);
+
+  // Create processed device data using local priority lists
+  const processedDeviceData = deviceData ? (() => {
+    const createDeviceListWithLocalPriorities = (devices: Device[], priorityList: string[]) => {
+      return devices.map(device => ({
+        ...device,
+        priorityRank: priorityList.findIndex(name => name.toLowerCase() === device.name.toLowerCase()) + 1 || priorityList.length + 1
+      })).sort((a, b) => a.priorityRank - b.priorityRank);
+    };
+
+    return {
+      outputDevices: createDeviceListWithLocalPriorities(deviceData.outputDevices, localOutputPriorityList),
+      inputDevices: createDeviceListWithLocalPriorities(deviceData.inputDevices, localInputPriorityList),
+    };
+  })() : null;
 
   if (isLoading) {
     return <List isLoading={true} />;
   }
 
-  if (!deviceData) {
+  if (!processedDeviceData) {
     return (
       <List>
         <List.EmptyView
@@ -180,24 +211,22 @@ export default function ListDevices() {
 
   const setAsTopPriority = async (device: Device, deviceType: "output" | "input") => {
     try {
+      const currentList = deviceType === "output" ? localOutputPriorityList : localInputPriorityList;
+      const newList = [
+        device.name,
+        ...currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase()),
+      ];
+      
+      // Update local state immediately for instant visual feedback
       if (deviceType === "output") {
-        const currentList = await getOutputPriorityList();
-        const newList = [
-          device.name,
-          ...currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase()),
-        ];
+        setLocalOutputPriorityList(newList);
         await setOutputPriorityList(newList);
         showToast({ style: Toast.Style.Success, title: `Set ${device.name} as top priority output device` });
       } else {
-        const currentList = await getInputPriorityList();
-        const newList = [
-          device.name,
-          ...currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase()),
-        ];
+        setLocalInputPriorityList(newList);
         await setInputPriorityList(newList);
         showToast({ style: Toast.Style.Success, title: `Set ${device.name} as top priority input device` });
       }
-      revalidate();
 
       // Auto-switch if enabled and device is available
       await autoSwitchIfTopPriority(device, 1, deviceType);
@@ -223,8 +252,7 @@ export default function ListDevices() {
         }
 
         showToast({ style: Toast.Style.Success, title: `Moved ${device.name} up in priority` });
-        revalidate();
-
+  
         // Auto-switch if device moved to #1 position
         if (currentIndex === 1) {
           // Was at position 2, now at position 1
@@ -253,8 +281,7 @@ export default function ListDevices() {
         }
 
         showToast({ style: Toast.Style.Success, title: `Moved ${device.name} down in priority` });
-        revalidate();
-      }
+        }
     } catch (error) {
       showToast({ style: Toast.Style.Failure, title: "Failed to move device down" });
     }
@@ -272,7 +299,6 @@ export default function ListDevices() {
         await setInputPriorityList(newList);
         showToast({ style: Toast.Style.Success, title: `Moved ${device.name} to bottom of input priority list` });
       }
-      revalidate();
     } catch (error) {
       showToast({ style: Toast.Style.Failure, title: "Failed to move device" });
     }
@@ -328,8 +354,7 @@ export default function ListDevices() {
                   style: Toast.Style.Success,
                   title: `Removed ${device.name} from ${deviceType} priority list`,
                 });
-                revalidate();
-              } catch (error) {
+                        } catch (error) {
                 showToast({ style: Toast.Style.Failure, title: "Failed to remove device" });
               }
             }}
@@ -398,8 +423,8 @@ export default function ListDevices() {
 
   return (
     <List searchBarPlaceholder="Search audio devices...">
-      <List.Section title={`Output Devices (${deviceData.outputDevices.length})`}>
-        {deviceData.outputDevices.map((device) => (
+      <List.Section title={`Output Devices (${processedDeviceData.outputDevices.length})`}>
+        {processedDeviceData.outputDevices.map((device) => (
           <List.Item
             key={device.uid}
             title={device.name}
@@ -419,8 +444,8 @@ export default function ListDevices() {
         ))}
       </List.Section>
 
-      <List.Section title={`Input Devices (${deviceData.inputDevices.length})`}>
-        {deviceData.inputDevices.map((device) => (
+      <List.Section title={`Input Devices (${processedDeviceData.inputDevices.length})`}>
+        {processedDeviceData.inputDevices.map((device) => (
           <List.Item
             key={device.uid}
             title={device.name}
