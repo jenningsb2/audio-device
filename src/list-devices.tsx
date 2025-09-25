@@ -6,7 +6,8 @@ import {
   getInputPriorityList,
   setOutputPriorityList,
   setInputPriorityList,
-  getPriorityRank,
+  assignPriorityRanks,
+  ensureAllDevicesInPriorityList,
 } from "./priority-utils";
 
 type Device = {
@@ -16,7 +17,7 @@ type Device = {
   transportType: string;
   isInput: boolean;
   isOutput: boolean;
-  priorityRank: number | null;
+  priorityRank: number;
 };
 
 export default function ListDevices() {
@@ -25,43 +26,28 @@ export default function ListDevices() {
     isLoading,
     revalidate,
   } = usePromise(async () => {
-    const [outputDevices, inputDevices, outputPriorityList, inputPriorityList] = await Promise.all([
-      getOutputDevices(),
-      getInputDevices(),
-      getOutputPriorityList(),
-      getInputPriorityList(),
+    const [outputDevices, inputDevices] = await Promise.all([getOutputDevices(), getInputDevices()]);
+
+    // Ensure all devices are in priority lists and get updated lists
+    const [outputPriorityList, inputPriorityList] = await Promise.all([
+      ensureAllDevicesInPriorityList(outputDevices, true),
+      ensureAllDevicesInPriorityList(inputDevices, false),
     ]);
 
-    const processedOutputDevices = outputDevices.map((device) => ({
+    // Assign priority ranks and transport types to all devices
+    const processedOutputDevices = assignPriorityRanks(outputDevices, outputPriorityList).map((device) => ({
       ...device,
       transportType: Object.entries(TransportType).find(([, v]) => v === device.transportType)?.[0] || "Unknown",
-      priorityRank: getPriorityRank(device.name, outputPriorityList),
     }));
 
-    const processedInputDevices = inputDevices.map((device) => ({
+    const processedInputDevices = assignPriorityRanks(inputDevices, inputPriorityList).map((device) => ({
       ...device,
       transportType: Object.entries(TransportType).find(([, v]) => v === device.transportType)?.[0] || "Unknown",
-      priorityRank: getPriorityRank(device.name, inputPriorityList),
     }));
 
-    // Sort devices: priority devices first (by rank), then non-priority alphabetically
-    processedOutputDevices.sort((a, b) => {
-      if (a.priorityRank && b.priorityRank) {
-        return a.priorityRank - b.priorityRank; // Lower rank number = higher priority
-      }
-      if (a.priorityRank && !b.priorityRank) return -1; // Priority devices first
-      if (!a.priorityRank && b.priorityRank) return 1; // Priority devices first
-      return a.name.localeCompare(b.name); // Alphabetical for non-priority
-    });
-
-    processedInputDevices.sort((a, b) => {
-      if (a.priorityRank && b.priorityRank) {
-        return a.priorityRank - b.priorityRank; // Lower rank number = higher priority
-      }
-      if (a.priorityRank && !b.priorityRank) return -1; // Priority devices first
-      if (!a.priorityRank && b.priorityRank) return 1; // Priority devices first
-      return a.name.localeCompare(b.name); // Alphabetical for non-priority
-    });
+    // Sort devices by priority rank (lower rank = higher priority)
+    processedOutputDevices.sort((a, b) => a.priorityRank - b.priorityRank);
+    processedInputDevices.sort((a, b) => a.priorityRank - b.priorityRank);
 
     return {
       outputDevices: processedOutputDevices,
@@ -110,74 +96,47 @@ export default function ListDevices() {
     }
   };
 
-  const addToPriorityList = async (device: Device) => {
+  const moveToBottom = async (device: Device) => {
     try {
       if (device.isOutput) {
         const currentList = await getOutputPriorityList();
-        if (!currentList.some((name) => name.toLowerCase() === device.name.toLowerCase())) {
-          await setOutputPriorityList([...currentList, device.name]);
-          showHUD(`Added ${device.name} to output priority list`);
-        }
-      } else {
-        const currentList = await getInputPriorityList();
-        if (!currentList.some((name) => name.toLowerCase() === device.name.toLowerCase())) {
-          await setInputPriorityList([...currentList, device.name]);
-          showHUD(`Added ${device.name} to input priority list`);
-        }
-      }
-      revalidate();
-    } catch (error) {
-      showToast({ style: Toast.Style.Failure, title: "Failed to add to priority list" });
-    }
-  };
-
-  const removeFromPriorityList = async (device: Device) => {
-    try {
-      if (device.isOutput) {
-        const currentList = await getOutputPriorityList();
-        const newList = currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase());
+        const newList = [
+          ...currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase()),
+          device.name,
+        ];
         await setOutputPriorityList(newList);
-        showHUD(`Removed ${device.name} from output priority list`);
+        showHUD(`Moved ${device.name} to bottom of output priority list`);
       } else {
         const currentList = await getInputPriorityList();
-        const newList = currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase());
+        const newList = [
+          ...currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase()),
+          device.name,
+        ];
         await setInputPriorityList(newList);
-        showHUD(`Removed ${device.name} from input priority list`);
+        showHUD(`Moved ${device.name} to bottom of input priority list`);
       }
       revalidate();
     } catch (error) {
-      showToast({ style: Toast.Style.Failure, title: "Failed to remove from priority list" });
+      showToast({ style: Toast.Style.Failure, title: "Failed to move device" });
     }
   };
 
   const renderDeviceActions = (device: Device) => (
     <ActionPanel>
-      {device.priorityRank ? (
-        <ActionPanel.Section title="Priority Actions">
-          <Action
-            title="Set as Top Priority"
-            icon={Icon.ChevronUp}
-            onAction={() => setAsTopPriority(device)}
-            shortcut={{ modifiers: ["cmd"], key: "t" }}
-          />
-          <Action
-            title="Remove from Priority List"
-            icon={Icon.Trash}
-            style={Action.Style.Destructive}
-            onAction={() => removeFromPriorityList(device)}
-            shortcut={{ modifiers: ["cmd"], key: "backspace" }}
-          />
-        </ActionPanel.Section>
-      ) : (
-        <ActionPanel.Section title="Priority Actions">
-          <Action
-            title="Add to Priority List"
-            icon={Icon.Plus}
-            onAction={() => addToPriorityList(device)}
-            shortcut={{ modifiers: ["cmd"], key: "return" }}
-          />
-        </ActionPanel.Section>
-      )}
+      <ActionPanel.Section title="Priority Actions">
+        <Action
+          title="Set as Top Priority"
+          icon={Icon.ChevronUp}
+          onAction={() => setAsTopPriority(device)}
+          shortcut={{ modifiers: ["cmd"], key: "t" }}
+        />
+        <Action
+          title="Move to Bottom"
+          icon={Icon.ChevronDown}
+          onAction={() => moveToBottom(device)}
+          shortcut={{ modifiers: ["cmd"], key: "b" }}
+        />
+      </ActionPanel.Section>
 
       <ActionPanel.Section title="Copy Actions">
         <Action.CopyToClipboard
@@ -243,12 +202,10 @@ export default function ListDevices() {
             subtitle={device.transportType}
             icon={{
               source: getDeviceIcon(device),
-              tintColor: device.priorityRank ? Color.Green : Color.PrimaryText,
+              tintColor: device.priorityRank <= 3 ? Color.Green : Color.SecondaryText,
             }}
             accessories={[
-              ...(device.priorityRank
-                ? [{ text: `#${device.priorityRank}`, tooltip: `Priority rank ${device.priorityRank}` }]
-                : []),
+              { text: `#${device.priorityRank}`, tooltip: `Priority rank ${device.priorityRank}` },
               { text: device.id, tooltip: `Device ID: ${device.id}` },
             ]}
             actions={renderDeviceActions(device)}
@@ -264,12 +221,10 @@ export default function ListDevices() {
             subtitle={device.transportType}
             icon={{
               source: getDeviceIcon(device),
-              tintColor: device.priorityRank ? Color.Green : Color.PrimaryText,
+              tintColor: device.priorityRank <= 3 ? Color.Green : Color.SecondaryText,
             }}
             accessories={[
-              ...(device.priorityRank
-                ? [{ text: `#${device.priorityRank}`, tooltip: `Priority rank ${device.priorityRank}` }]
-                : []),
+              { text: `#${device.priorityRank}`, tooltip: `Priority rank ${device.priorityRank}` },
               { text: device.id, tooltip: `Device ID: ${device.id}` },
             ]}
             actions={renderDeviceActions(device)}
